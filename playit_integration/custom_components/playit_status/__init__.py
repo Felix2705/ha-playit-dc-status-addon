@@ -31,6 +31,8 @@ class PlayitCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         session = async_get_clientsession(self.hass)
 
+        _LOGGER.debug("PlayitCoordinator: Update startet. url=%s", self.url)
+
         try:
             # 1) Versuche direkt JSON (falls /status oder API-Endpunkt)
             async with session.get(self.url, timeout=20) as resp:
@@ -44,6 +46,11 @@ class PlayitCoordinator(DataUpdateCoordinator):
                 if isinstance(data, dict):
                     parsed = parse_json(data)
                     if parsed.get("regions") or parsed.get("overall"):
+                        _LOGGER.debug(
+                            "PlayitCoordinator: Direct-JSON ok. overall=%s regions=%d",
+                            parsed.get("overall"),
+                            len(parsed.get("regions") or {}),
+                        )
                         return parsed
 
                 # 2) Optional: falls URL die Add-on-Base ist, versuche /status daneben
@@ -66,11 +73,14 @@ class PlayitCoordinator(DataUpdateCoordinator):
                         api_data = await api_resp.json(content_type=None)
                         return parse_json(api_data)
 
+                _LOGGER.debug("PlayitCoordinator: Fallback parse_html. url=%s text_len=%d", self.url, len(text or ""))
                 return parse_html(text)
 
         except asyncio.TimeoutError as err:
+            _LOGGER.exception("PlayitCoordinator: Timeout beim Abfragen. url=%s", self.url)
             raise UpdateFailed("Timeout fetching playit status") from err
         except Exception as err:
+            _LOGGER.exception("PlayitCoordinator: Update fehlgeschlagen. url=%s err=%s", self.url, err)
             raise UpdateFailed(err) from err
 
 

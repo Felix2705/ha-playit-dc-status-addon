@@ -1,0 +1,14 @@
+# Add this to your configuration.yaml via 'script: !include playit_scripts.yaml' or merge into your scripts.yaml
+playit_refresh:
+  alias: "Playit: Refresh Status"
+  sequence:
+    - service: homeassistant.update_entity
+      target:
+        entity_id: sensor.playit_status_overall
+    - delay: '00:00:02'
+    - service: homeassistant.update_entity
+      target:
+        entity_id: sensor.playit_status_region_DC_West
+    - service: homeassistant.update_entity
+      target:
+        entity_id: sensor.playit_status_region_DC_East
