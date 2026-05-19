@@ -25,7 +25,6 @@ Fehlersuche:
 - Prüfe Home Assistant Logs auf Einträge mit `playit_status`.
 - Stelle sicher, dass dein Host Internetzugang hat und die Ziel‑URL erreichbar ist.
 
-Bei Änderungswünschen (z. B. Add‑on schreibt Daten in `/config` zur Integration) sag Bescheid — ich implementiere das gerne.
-3. Home Assistant neu starten.
+
 
 
