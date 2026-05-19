@@ -1,3 +1,5 @@
+import re
+
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.const import ATTR_ATTRIBUTION
 from homeassistant.helpers.entity import DeviceInfo
@@ -92,7 +94,17 @@ class PlayitRegionSensor(PlayitBaseSensor):
 
     @property
     def unique_id(self):
-        return f"playit_status_region_{self._region}"
+        slug = re.sub(r"[^a-z0-9]+", "_", self._region.lower()).strip("_")
+        return f"playit_status_region_{slug}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        slug = re.sub(r"[^a-z0-9]+", "_", self._region.lower()).strip("_")
+        return DeviceInfo(
+            identifiers={(DOMAIN, slug)},
+            name=f"Playit {self._region}",
+            manufacturer="playit.gg",
+        )
 
     @property
     def state(self):

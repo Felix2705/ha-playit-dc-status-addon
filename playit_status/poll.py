@@ -1,7 +1,7 @@
 import sys
 import requests
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def poll(url: str):
@@ -16,14 +16,14 @@ def poll(url: str):
             data = {'text_preview': r.text[:800]}
 
         out = {
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': datetime.now(timezone.utc).isoformat() + 'Z',
             'url': url,
             'status_code': r.status_code,
             'data_preview': data,
         }
         print(json.dumps(out))
     except Exception as e:
-        print(json.dumps({'timestamp': datetime.utcnow().isoformat() + 'Z', 'error': str(e)}))
+        print(json.dumps({'timestamp': datetime.now(timezone.utc).isoformat() + 'Z', 'error': str(e)}))
 
 
 if __name__ == '__main__':

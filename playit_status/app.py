@@ -35,7 +35,15 @@ def load_options():
 
 def extract_api_url(html_text):
     match = re.search(r"window\.pspApiPath\s*=\s*['\"]([^'\"]+)['\"]", html_text)
-    return match.group(1) if match else None
+    if match:
+        return match.group(1)
+
+    # fallback for pages with different JS bootstrap code or inline API URLs
+    match = re.search(r"https?://[^'\"\s]+/api/getMonitorList/[^'\"\s]+", html_text)
+    if match:
+        return match.group(0)
+
+    return None
 
 
 def normalize_status(value):
@@ -51,6 +59,18 @@ def normalize_status(value):
     return value
 
 
+def derive_overall_from_regions(regions):
+    if not regions:
+        return "unknown"
+
+    statuses = [str(value).lower() for value in regions.values() if value]
+    if any("down" in s or "outage" in s or "danger" in s or "error" in s or "degrad" in s or "fail" in s for s in statuses):
+        return "issue"
+    if all(s in {"operational", "ok", "up", "available"} for s in statuses):
+        return "operational"
+    return "unknown"
+
+
 def parse_playit_json(data):
     regions = {}
     overall = "unknown"
@@ -59,7 +79,6 @@ def parse_playit_json(data):
         counts = data.get("statistics", {}).get("counts", {})
         down = int(counts.get("down", 0) or 0)
         up = int(counts.get("up", 0) or 0)
-        paused = int(counts.get("paused", 0) or 0)
         if down > 0:
             overall = f"{down} down"
         elif up > 0:
@@ -77,6 +96,9 @@ def parse_playit_json(data):
             name = item.get("name") or item.get("groupName") or str(item.get("monitorId", "unknown"))
             status = normalize_status(item.get("statusClass") or item.get("label") or item.get("state") or item.get("status"))
             regions[name] = status
+
+        if overall == "unknown":
+            overall = derive_overall_from_regions(regions)
 
     return overall, regions
 
