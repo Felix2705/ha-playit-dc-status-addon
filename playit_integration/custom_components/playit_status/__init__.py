@@ -1,6 +1,7 @@
 from datetime import timedelta
 import asyncio
 import logging
+import re
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -27,16 +28,24 @@ class PlayitCoordinator(DataUpdateCoordinator):
         try:
             async with session.get(self.url, timeout=20) as resp:
                 text = await resp.text()
-                # Try JSON first
+                data = None
+
                 try:
                     data = await resp.json()
                 except Exception:
                     data = None
 
                 if data:
-                    return parse_json(data)
+                    parsed = parse_json(data)
+                    if parsed["regions"]:
+                        return parsed
 
-                # fallback: simple HTML/text parsing
+                api_url = extract_api_url(text)
+                if api_url:
+                    async with session.get(api_url, timeout=20) as api_resp:
+                        api_data = await api_resp.json()
+                        return parse_json(api_data)
+
                 return parse_html(text)
         except asyncio.TimeoutError as err:
             raise UpdateFailed("Timeout fetching playit status") from err
@@ -44,30 +53,74 @@ class PlayitCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(err) from err
 
 
+def extract_api_url(html_text: str):
+    match = re.search(r"window\.pspApiPath\s*=\s*['\"]([^'\"]+)['\"]", html_text)
+    if match:
+        return match.group(1)
+
+    match = re.search(r"https?://[^'\"]+/api/getMonitorList/[^'\"]+", html_text)
+    if match:
+        return match.group(0)
+
+    match = re.search(r"['\"](/api/getMonitorList/[^'\"]+)['\"]", html_text)
+    if match:
+        return f"https://dc.status.playit.gg{match.group(1)}"
+
+    return None
+
+
+def normalize_status(value):
+    if not value:
+        return "unknown"
+    value = str(value).strip().lower()
+    if value in {"ok", "good", "operational", "up", "success", "available"}:
+        return "operational"
+    if value in {"danger", "down", "error", "outage", "critical", "failed"}:
+        return "issue"
+    if value in {"warning", "degraded", "partial", "minor"}:
+        return "degraded"
+    return value
+
+
+def derive_overall_from_regions(regions):
+    if not regions:
+        return "unknown"
+    statuses = [str(v).lower() for v in regions.values() if v]
+    if any("down" in s or "outage" in s or "danger" in s or "error" in s or "degrad" in s or "fail" in s for s in statuses):
+        return "issue"
+    if all(s in {"operational", "ok", "up", "available"} for s in statuses):
+        return "operational"
+    return "unknown"
+
+
 def parse_json(data):
-    # Handle typical statuspage-like structures
     result = {
         "overall": None,
         "regions": {},
         "raw": data,
     }
 
-    # components array
     if isinstance(data, dict):
-        if "components" in data and isinstance(data["components"], list):
-            for comp in data["components"]:
-                name = comp.get("name") or comp.get("id")
-                status = comp.get("status") or comp.get("indicator") or comp.get("state")
-                if name:
-                    result["regions"][name] = status or "unknown"
+        if "status" in data and not isinstance(data["status"], dict):
+            result["overall"] = normalize_status(data["status"])
 
-        # summary or status
-        if "status" in data:
-            # status may be dict
-            if isinstance(data["status"], dict):
-                result["overall"] = data["status"].get("description") or data["status"].get("indicator")
-            else:
-                result["overall"] = data["status"]
+        items = []
+        if isinstance(data.get("data"), list):
+            items = data["data"]
+        elif isinstance(data.get("psp", {}).get("monitors"), list):
+            items = data["psp"]["monitors"]
+        elif isinstance(data.get("components"), list):
+            items = data["components"]
+        elif isinstance(data.get("monitors"), list):
+            items = data["monitors"]
+
+        for item in items:
+            name = item.get("name") or item.get("groupName") or str(item.get("monitorId") or item.get("id") or "unknown")
+            status = normalize_status(item.get("statusClass") or item.get("label") or item.get("state") or item.get("status") or item.get("indicator"))
+            result["regions"][name] = status
+
+        if not result["overall"]:
+            result["overall"] = derive_overall_from_regions(result["regions"])
 
     return result
 

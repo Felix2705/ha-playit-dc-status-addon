@@ -11,6 +11,9 @@ import requests
 BASE_DIR = "/addon"
 STATIC_DIR = os.path.join(BASE_DIR, "app")
 STATUS_URL = "https://dc.status.playit.gg/"
+STATUS_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; PlayitStatus/1.0; +https://github.com/Felix2705/ha-playit-server-status)"
+}
 INTERVAL = 60
 STATUS_DATA = {
     "last_update": None,
@@ -36,12 +39,19 @@ def load_options():
 def extract_api_url(html_text):
     match = re.search(r"window\.pspApiPath\s*=\s*['\"]([^'\"]+)['\"]", html_text)
     if match:
-        return match.group(1)
+        api_url = match.group(1)
+        if api_url.startswith("/"):
+            return f"https://dc.status.playit.gg{api_url}"
+        return api_url
 
     # fallback for pages with different JS bootstrap code or inline API URLs
-    match = re.search(r"https?://[^'\"\s]+/api/getMonitorList/[^'\"\s]+", html_text)
+    match = re.search(r"https?://[^'\"]+/api/getMonitorList/[^'\"]+", html_text)
     if match:
         return match.group(0)
+
+    match = re.search(r"['\"](/api/getMonitorList/[^'\"]+)['\"]", html_text)
+    if match:
+        return f"https://dc.status.playit.gg{match.group(1)}"
 
     return None
 
@@ -84,17 +94,21 @@ def parse_playit_json(data):
         elif up > 0:
             overall = "operational"
         else:
-            overall = data.get("status", "unknown")
+            overall = normalize_status(data.get("status", "unknown"))
 
         items = []
         if isinstance(data.get("data"), list):
             items = data["data"]
         elif isinstance(data.get("psp", {}).get("monitors"), list):
             items = data["psp"]["monitors"]
+        elif isinstance(data.get("components"), list):
+            items = data["components"]
+        elif isinstance(data.get("monitors"), list):
+            items = data["monitors"]
 
         for item in items:
-            name = item.get("name") or item.get("groupName") or str(item.get("monitorId", "unknown"))
-            status = normalize_status(item.get("statusClass") or item.get("label") or item.get("state") or item.get("status"))
+            name = item.get("name") or item.get("groupName") or str(item.get("monitorId") or item.get("id") or "unknown")
+            status = normalize_status(item.get("statusClass") or item.get("label") or item.get("state") or item.get("status") or item.get("indicator"))
             regions[name] = status
 
         if overall == "unknown":
@@ -106,7 +120,7 @@ def parse_playit_json(data):
 def update_status():
     global STATUS_DATA
     try:
-        response = requests.get(STATUS_URL, timeout=20)
+        response = requests.get(STATUS_URL, headers=STATUS_HEADERS, timeout=20)
         response.raise_for_status()
 
         content_type = response.headers.get("Content-Type", "")
@@ -117,7 +131,7 @@ def update_status():
             html = response.text
             api_url = extract_api_url(html)
             if api_url:
-                response = requests.get(api_url, timeout=20)
+                response = requests.get(api_url, headers=STATUS_HEADERS, timeout=20)
                 response.raise_for_status()
                 data = response.json()
             else:
