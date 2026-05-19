@@ -17,6 +17,7 @@ STATUS_HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; PlayitStatus/1.0; +https://github.com/Felix2705/ha-playit-server-status)"
 }
 INTERVAL = 60
+MODE = "integration"
 STATUS_DATA = {
     "last_update": None,
     "overall": "unbekannt",
@@ -26,7 +27,7 @@ STATUS_DATA = {
 
 
 def load_options():
-    global STATUS_URL, INTERVAL
+    global STATUS_URL, INTERVAL, MODE
     options_file = "/data/options.json"
     if os.path.exists(options_file):
         try:
@@ -34,6 +35,7 @@ def load_options():
                 options = json.load(f)
             STATUS_URL = options.get("status_url", STATUS_URL)
             INTERVAL = int(options.get("interval", INTERVAL))
+            MODE = options.get("mode", MODE)
         except Exception as err:
             print(f"Failed to load options.json: {err}")
 
@@ -249,8 +251,19 @@ if __name__ == "__main__":
     # Erst Integration bereitstellen, dann normal starten
     copy_integration_into_ha()
     load_options()
+
+    # Mode für die Integration bereitstellen (damit der Integrations-Dialog keine Mode-Auswahl mehr braucht)
+    try:
+        mode_root = "/config/playit_status"
+        os.makedirs(mode_root, exist_ok=True)
+        with open(os.path.join(mode_root, "mode.json"), "w", encoding="utf-8") as f:
+            json.dump({"mode": MODE}, f)
+        print(f"[PlayitStatus] wrote mode.json mode={MODE}")
+    except Exception as err:
+        print(f"[PlayitStatus] could not write mode.json: {err}")
+
     thread = threading.Thread(target=poll_loop, daemon=True)
     thread.start()
     server = ThreadingHTTPServer(("0.0.0.0", 8080), Handler)
-    print(f"Starte Playit-Statusoberfläche auf http://0.0.0.0:8080, Abfrage von {STATUS_URL} alle {INTERVAL}s")
+    print(f"Starte Playit-Statusoberfläche auf http://0.0.0.0:8080, Abfrage von {STATUS_URL} alle {INTERVAL}s (mode={MODE})")
     server.serve_forever()

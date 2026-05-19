@@ -9,8 +9,8 @@ Nutze das Add-on für Supervisor-basierte Installationen oder die Integration f�
 
 ## Version
 
-- Add-on: `0.1.9-Beta`
-- Integration: `0.1.9-Beta`
+- Add-on: `0.1.11-Beta`
+- Integration: `0.1.11-Beta`
 
 ## Installation
 
@@ -30,7 +30,7 @@ Nutze das Add-on für Supervisor-basierte Installationen oder die Integration f�
 3. Suche nach **„Playit Server Status“** und füge die Integration hinzu.
 4. URL/Scan-Interval kannst du im Dialog setzen (Standard: `https://dc.status.playit.gg/`, `60s`).
 
-Hinweis: Die Suche funktioniert zuverlässig nach einem Neustart/Reload von Home Assistant.
+Hinweis: Die Integration wird durch das Add-on automatisch nach `config/custom_components/` kopiert. Damit sie in der Integrationsliste erscheint, starte Home Assistant anschließend komplett neu.
 
 ## Nutzung
 

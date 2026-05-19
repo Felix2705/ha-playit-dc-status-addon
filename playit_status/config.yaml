@@ -1,6 +1,6 @@
 name: "Playit DC Status"
 description: "Polls Playit.gg status and exposes a web UI in Home Assistant ingress."
-version: "0.1.9-Beta"
+version: "0.1.11-Beta"
 slug: "playit_status"
 startup: "services"
 boot: "auto"
@@ -23,6 +23,8 @@ map:
 options:
   status_url: "https://dc.status.playit.gg/"
   interval: 60
+  mode: "integration"
 schema:
   status_url: str
   interval: int
+  mode: str

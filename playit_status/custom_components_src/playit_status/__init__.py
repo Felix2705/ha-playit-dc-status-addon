@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 from datetime import timedelta
@@ -16,6 +17,25 @@ _LOGGER = logging.getLogger(__name__)
 
 MODE_INTEGRATION = "integration"
 MODE_GUI_ONLY = "gui_only"
+
+
+def load_mode_from_addon() -> str:
+    """
+    Mode wird ausschließlich vom Supervisor-Add-on gesteuert:
+    /config/playit_status/mode.json
+
+    Ziel: Keine Mode-Auswahl mehr im HA-Integrationsdialog.
+    """
+    mode_file = "/config/playit_status/mode.json"
+    try:
+        with open(mode_file, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        mode = (payload or {}).get("mode")
+        if mode in {MODE_INTEGRATION, MODE_GUI_ONLY}:
+            return mode
+    except Exception:
+        pass
+    return MODE_INTEGRATION
 
 
 class PlayitCoordinator(DataUpdateCoordinator):
@@ -255,7 +275,7 @@ async def _setup_coordinator_and_maybe_sensors(
         return True
 
     coordinator = PlayitCoordinator(hass, url, interval)
-    await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_refresh()
 
     hass.data.setdefault(DOMAIN, {})["coordinator"] = coordinator
     hass.data[DOMAIN]["mode"] = mode
@@ -270,7 +290,8 @@ async def _setup_coordinator_and_maybe_sensors(
 async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     url = entry.data.get("url", DEFAULT_URL)
     interval = entry.data.get("scan_interval", DEFAULT_SCAN_INTERVAL)
-    mode = entry.data.get("mode", MODE_INTEGRATION)
+    # Mode kommt ausschließlich aus dem Supervisor-Add-on
+    mode = load_mode_from_addon()
 
     return await _setup_coordinator_and_maybe_sensors(hass, url, interval, mode)
 
@@ -280,6 +301,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     conf = config.get(DOMAIN, {})
     url = conf.get("url", DEFAULT_URL)
     interval = conf.get("scan_interval", DEFAULT_SCAN_INTERVAL)
-    mode = conf.get("mode", MODE_INTEGRATION)
+    # Mode kommt ausschließlich aus dem Supervisor-Add-on
+    mode = load_mode_from_addon()
 
     return await _setup_coordinator_and_maybe_sensors(hass, url, interval, mode)
