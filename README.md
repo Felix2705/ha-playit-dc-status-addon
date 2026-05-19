@@ -9,8 +9,8 @@ Nutze das Add-on für Supervisor-basierte Installationen oder die Integration f�
 
 ## Version
 
-- Add-on: `0.1.3-beta`
-- Integration: `0.1.3-beta`
+- Add-on: `0.1.4-beta`
+- Integration: `0.1.4-beta`
 
 ## Installation
 
@@ -53,7 +53,3 @@ Nutze das Add-on für Supervisor-basierte Installationen oder die Integration f�
 
 - Für die Integration verwende den Ordner `playit_integration/`.
 - Bei Problemen prüfe die Add-on-Logs und die Home Assistant-Protokolle.
-
-
-
-
