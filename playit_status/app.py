@@ -1,8 +1,9 @@
 import json
 import os
+import re
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import requests
@@ -32,43 +33,85 @@ def load_options():
             print(f"Failed to load options.json: {err}")
 
 
+def extract_api_url(html_text):
+    match = re.search(r"window\.pspApiPath\s*=\s*['\"]([^'\"]+)['\"]", html_text)
+    return match.group(1) if match else None
+
+
+def normalize_status(value):
+    if not value:
+        return "unknown"
+    value = str(value).strip().lower()
+    if value in {"ok", "good", "operational", "up", "success", "available"}:
+        return "operational"
+    if value in {"danger", "down", "error", "outage", "critical", "failed"}:
+        return "issue"
+    if value in {"warning", "degraded", "partial", "minor"}:
+        return "degraded"
+    return value
+
+
+def parse_playit_json(data):
+    regions = {}
+    overall = "unknown"
+
+    if isinstance(data, dict):
+        counts = data.get("statistics", {}).get("counts", {})
+        down = int(counts.get("down", 0) or 0)
+        up = int(counts.get("up", 0) or 0)
+        paused = int(counts.get("paused", 0) or 0)
+        if down > 0:
+            overall = f"{down} down"
+        elif up > 0:
+            overall = "operational"
+        else:
+            overall = data.get("status", "unknown")
+
+        items = []
+        if isinstance(data.get("data"), list):
+            items = data["data"]
+        elif isinstance(data.get("psp", {}).get("monitors"), list):
+            items = data["psp"]["monitors"]
+
+        for item in items:
+            name = item.get("name") or item.get("groupName") or str(item.get("monitorId", "unknown"))
+            status = normalize_status(item.get("statusClass") or item.get("label") or item.get("state") or item.get("status"))
+            regions[name] = status
+
+    return overall, regions
+
+
 def update_status():
     global STATUS_DATA
     try:
         response = requests.get(STATUS_URL, timeout=20)
         response.raise_for_status()
+
+        content_type = response.headers.get("Content-Type", "")
         data = None
-        if "application/json" in response.headers.get("Content-Type", ""):
+        if "application/json" in content_type:
             data = response.json()
         else:
-            data = response.text
+            html = response.text
+            api_url = extract_api_url(html)
+            if api_url:
+                response = requests.get(api_url, timeout=20)
+                response.raise_for_status()
+                data = response.json()
+            else:
+                raise ValueError("Playit status page did not expose a JSON API endpoint")
 
-        regions = {}
-        overall = "unknown"
-        if isinstance(data, dict):
-            if "components" in data and isinstance(data["components"], list):
-                for comp in data["components"]:
-                    name = comp.get("name") or comp.get("id")
-                    status = comp.get("status") or comp.get("indicator") or comp.get("state")
-                    if name:
-                        regions[name] = status or "unknown"
-            if "status" in data:
-                if isinstance(data["status"], dict):
-                    overall = data["status"].get("description") or data["status"].get("indicator") or overall
-                else:
-                    overall = data["status"]
-        else:
-            overall = str(data)[:120]
+        overall, regions = parse_playit_json(data)
 
         STATUS_DATA = {
-            "last_update": datetime.utcnow().isoformat() + "Z",
+            "last_update": datetime.now(timezone.utc).isoformat(),
             "overall": overall,
             "regions": regions,
             "error": None,
         }
     except Exception as err:
         STATUS_DATA = {
-            "last_update": datetime.utcnow().isoformat() + "Z",
+            "last_update": datetime.now(timezone.utc).isoformat(),
             "overall": "error",
             "regions": {},
             "error": str(err),

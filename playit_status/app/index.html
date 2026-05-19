@@ -71,13 +71,14 @@
 
     function setBadge(status) {
       overallBadge.textContent = status;
-      overallBadge.className = 'badge ' + (status === 'operational' ? 'online' : status === 'issue' || status === 'error' ? 'issue' : 'status-unknown');
+      const normalized = status.toString().toLowerCase();
+      overallBadge.className = 'badge ' + (normalized === 'operational' ? 'online' : normalized === 'issue' || normalized === 'error' || normalized.includes('down') || normalized.includes('outage') || normalized.includes('degrad') ? 'issue' : 'status-unknown');
     }
 
     function updateContent(data) {
       const overall = data.overall || 'unknown';
       overallText.textContent = overall;
-      setBadge(overall === 'operational' || overall.toLowerCase().includes('ok') ? 'operational' : overall === 'error' || overall.toLowerCase().includes('fail') ? 'issue' : overall);
+      setBadge(overall);
       lastUpdate.textContent = new Date(data.last_update || Date.now()).toLocaleString();
       errorText.textContent = data.error ? 'Fehler: ' + data.error : '';
 
@@ -94,7 +95,7 @@
         const chip = document.createElement('span');
         const normalized = (status || 'unknown').toString().toLowerCase();
         chip.textContent = status;
-        chip.className = 'status-chip ' + (normalized.includes('operational') || normalized.includes('ok') ? 'status-ok' : normalized.includes('error') || normalized.includes('outage') || normalized.includes('degrad') ? 'status-error' : 'status-unknown');
+        chip.className = 'status-chip ' + (normalized.includes('operational') || normalized.includes('ok') ? 'status-ok' : normalized.includes('error') || normalized.includes('outage') || normalized.includes('down') || normalized.includes('degrad') ? 'status-error' : 'status-unknown');
         statusCell.appendChild(chip);
         row.appendChild(nameCell);
         row.appendChild(statusCell);
