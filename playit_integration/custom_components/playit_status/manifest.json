@@ -3,7 +3,7 @@
   "name": "Playit Server Status",
   "config_flow": true,
   "icon": "mdi:server",
-  "version": "0.1.17-Beta",
+  "version": "0.1.20-Beta",
   "documentation": "",
   "requirements": [],
   "codeowners": [],
