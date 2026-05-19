@@ -9,8 +9,8 @@ Nutze das Add-on für Supervisor-basierte Installationen oder die Integration f�
 
 ## Version
 
-- Add-on: `0.1.7-Beta`
-- Integration: `0.1.7-Beta`
+- Add-on: `0.1.9-Beta`
+- Integration: `0.1.9-Beta`
 
 ## Installation
 
@@ -23,11 +23,14 @@ Nutze das Add-on für Supervisor-basierte Installationen oder die Integration f�
    - `interval`: Aktualisierungsintervall in Sekunden
 4. Starte das Add-on und öffne die Ingress-UI.
 
-### Custom Integration
+### Integration in Home Assistant hinzufügen (ohne YAML)
 
-1. Kopiere den Ordner `playit_integration/custom_components/playit_status` in dein Home Assistant-Verzeichnis `custom_components`.
-2. Starte Home Assistant neu.
-3. Konfiguriere die Integration über YAML oder den Integrations-Dialog mit der URL `https://dc.status.playit.gg/`.
+1. Starte zuerst das **Supervisor Add-on**.
+2. Danach in Home Assistant: **Einstellungen → Geräte & Dienste → Integration hinzufügen**.
+3. Suche nach **„Playit Server Status“** und füge die Integration hinzu.
+4. URL/Scan-Interval kannst du im Dialog setzen (Standard: `https://dc.status.playit.gg/`, `60s`).
+
+Hinweis: Die Suche funktioniert zuverlässig nach einem Neustart/Reload von Home Assistant.
 
 ## Nutzung
 

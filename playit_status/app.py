@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 import threading
 import time
 from datetime import datetime, timezone
@@ -191,7 +192,32 @@ class Handler(SimpleHTTPRequestHandler):
         pass
 
 
+def copy_integration_into_ha():
+    """
+    Kopiert die Custom-Integration aus dem Container-Image nach:
+    /config/custom_components/playit_status
+    (damit sie in HA ohne YAML in der Suche auftaucht.)
+    """
+    src = "/addon/custom_components_src/playit_status"
+    dst = "/config/custom_components/playit_status"
+
+    # Falls wir z.B. nicht in einer HA-Supervisor-Umgebung laufen, /config kann fehlen
+    if not os.path.exists(src):
+        print(f"Integration-Quelle nicht gefunden: {src}")
+        return
+
+    try:
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        # Python 3.12: dirs_exist_ok=True erlaubt Overwrite/Update
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+        print(f"Integration nach HA kopiert: {dst}")
+    except Exception as err:
+        print(f"Integration-Kopie fehlgeschlagen: {err}")
+
+
 if __name__ == "__main__":
+    # Erst Integration bereitstellen, dann normal starten
+    copy_integration_into_ha()
     load_options()
     thread = threading.Thread(target=poll_loop, daemon=True)
     thread.start()
