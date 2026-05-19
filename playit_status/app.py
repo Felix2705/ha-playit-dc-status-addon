@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import requests
+import sys
 
 BASE_DIR = "/addon"
 STATIC_DIR = os.path.join(BASE_DIR, "app")
@@ -196,23 +197,52 @@ def copy_integration_into_ha():
     """
     Kopiert die Custom-Integration aus dem Container-Image nach:
     /config/custom_components/playit_status
-    (damit sie in HA ohne YAML in der Suche auftaucht.)
+
+    Ziel: In HA unter Einstellungen -> Geräte & Dienste -> Integration sichtbar machen.
     """
     src = "/addon/custom_components_src/playit_status"
     dst = "/config/custom_components/playit_status"
+    cfg_cc_root = "/config/custom_components"
 
-    # Falls wir z.B. nicht in einer HA-Supervisor-Umgebung laufen, /config kann fehlen
+    def log(msg: str) -> None:
+        print(f"[PlayitStatus] {msg}", file=sys.stderr, flush=True)
+
+    log(f"copy_integration_into_ha(): src={src} dst={dst}")
+
+    # Diagnose: Verzeichnis-Existenz
     if not os.path.exists(src):
-        print(f"Integration-Quelle nicht gefunden: {src}")
-        return
+        log(f"Integration-Quelle NICHT gefunden: {src}")
+        try:
+            log(f"/addon exists: {os.path.exists('/addon')}")
+            log(f"/addon contents: {os.listdir('/addon')}")
+        except Exception as err:
+            log(f"konntes /addon nicht lesen: {err}")
+        raise FileNotFoundError(src)
 
     try:
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        log(f"/config exists: {os.path.exists('/config')}")
+        log(f"/config/custom_components exists: {os.path.exists(cfg_cc_root)}")
+        log(f"src contents: {os.listdir(src)}")
+
+        os.makedirs(cfg_cc_root, exist_ok=True)
+
         # Python 3.12: dirs_exist_ok=True erlaubt Overwrite/Update
         shutil.copytree(src, dst, dirs_exist_ok=True)
-        print(f"Integration nach HA kopiert: {dst}")
+
+        # Verifikation nach dem Kopieren
+        if not os.path.exists(dst):
+            raise FileNotFoundError(dst)
+
+        manifest = os.path.join(dst, "manifest.json")
+        if not os.path.exists(manifest):
+            raise FileNotFoundError(manifest)
+
+        log(f"Integration nach HA kopiert: {dst}")
+        log(f"dst contents: {os.listdir(dst)}")
+        log(f"manifest.json ok: {manifest}")
     except Exception as err:
-        print(f"Integration-Kopie fehlgeschlagen: {err}")
+        log(f"Integration-Kopie fehlgeschlagen: {err}")
+        raise
 
 
 if __name__ == "__main__":
