@@ -9,8 +9,8 @@ Nutze das Add-on f√ºr Supervisor-basierte Installationen oder die Integration f√
 
 ## Version
 
-- Add-on: `0.1.4-beta`
-- Integration: `0.1.4-beta`
+- Add-on: `0.1.5-Beta`
+- Integration: `0.1.5-Beta`
 
 ## Installation
 

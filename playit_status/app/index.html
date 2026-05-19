@@ -22,7 +22,7 @@
     .table tr { border-bottom: 1px solid rgba(148, 163, 184, 0.12); }
     .status-chip { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; font-size: 13px; }
     .status-ok { background: #16a34a33; color: #a7f3d0; }
-    .status-error { background: #fb7185; color: #fff; }
+    .status-issue { background: #fb7185; color: #fff; }
     .status-unknown { background: #334155; color: #cbd5e1; }
   </style>
 </head>
@@ -31,7 +31,7 @@
     <div class="header">
       <div>
         <h1 class="title">Playit DC Status</h1>
-        <p class="small">Aktueller Status und Regionenzustände von Playit.gg</p>
+        <p class="small">Aktueller Status und Regionszustände von Playit.gg</p>
       </div>
       <button id="refresh" class="button">Aktualisieren</button>
     </div>
@@ -39,13 +39,13 @@
     <div class="card">
       <div class="row">
         <div>
-          <h2 class="title">Gesamtzustand</h2>
+        <h2 class="title">Gesamtzustand</h2>
           <p id="overall-text" class="small">Lade...</p>
         </div>
         <div id="overall-badge" class="badge status-unknown">Lade...</div>
       </div>
-      <p class="small">Letzte Abfrage: <span id="last-update">–</span></p>
-      <p id="error-text" class="small" style="color:#f87171"></p>
+          <p class="small">Letzte Abfrage: <span id="last-update">–</span></p>
+          <p id="error-text" class="small" style="color:#f87171"></p>
     </div>
 
     <div class="card">
@@ -69,15 +69,41 @@
     const errorText = document.querySelector('#error-text');
     const regionsBody = document.querySelector('#regions-body');
 
+    function translateStatus(status) {
+      const normalized = (status || 'unbekannt').toString().toLowerCase();
+      if (normalized.includes('operational') || normalized.includes('ok') || normalized.includes('up') || normalized.includes('available') || normalized.includes('good') || normalized.includes('success')) {
+        return 'Betriebsbereit';
+      }
+      if (normalized.includes('issue') || normalized.includes('error') || normalized.includes('outage') || normalized.includes('down') || normalized.includes('danger') || normalized.includes('failed') || normalized.includes('critical')) {
+        return 'Störung';
+      }
+      if (normalized.includes('degrad') || normalized.includes('warning') || normalized.includes('partial') || normalized.includes('minor')) {
+        return 'Eingeschränkt';
+      }
+      return 'Unbekannt';
+    }
+
+    function statusClass(status) {
+      const normalized = (status || 'unbekannt').toString().toLowerCase();
+      if (normalized.includes('operational') || normalized.includes('ok') || normalized.includes('up') || normalized.includes('available') || normalized.includes('good') || normalized.includes('success')) {
+        return 'status-ok';
+      }
+      if (normalized.includes('issue') || normalized.includes('error') || normalized.includes('outage') || normalized.includes('down') || normalized.includes('danger') || normalized.includes('failed') || normalized.includes('critical') || normalized.includes('degrad') || normalized.includes('warning') || normalized.includes('partial') || normalized.includes('minor')) {
+        return 'status-issue';
+      }
+      return 'status-unknown';
+    }
+
     function setBadge(status) {
-      overallBadge.textContent = status;
-      const normalized = status.toString().toLowerCase();
-      overallBadge.className = 'badge ' + (normalized === 'operational' ? 'online' : normalized === 'issue' || normalized === 'error' || normalized.includes('down') || normalized.includes('outage') || normalized.includes('degrad') ? 'issue' : 'status-unknown');
+      const translated = translateStatus(status);
+      overallBadge.textContent = translated;
+      const normalized = (status || 'unbekannt').toString().toLowerCase();
+      overallBadge.className = 'badge ' + (normalized.includes('operational') || normalized.includes('ok') || normalized.includes('up') || normalized.includes('available') || normalized.includes('good') || normalized.includes('success') ? 'online' : statusClass(status) === 'status-issue' ? 'issue' : 'status-unknown');
     }
 
     function updateContent(data) {
       const overall = data.overall || 'unknown';
-      overallText.textContent = overall;
+      overallText.textContent = translateStatus(overall);
       setBadge(overall);
       lastUpdate.textContent = new Date(data.last_update || Date.now()).toLocaleString();
       errorText.textContent = data.error ? 'Fehler: ' + data.error : '';
@@ -93,9 +119,8 @@
         nameCell.textContent = region;
         const statusCell = document.createElement('td');
         const chip = document.createElement('span');
-        const normalized = (status || 'unknown').toString().toLowerCase();
-        chip.textContent = status;
-        chip.className = 'status-chip ' + (normalized.includes('operational') || normalized.includes('ok') ? 'status-ok' : normalized.includes('error') || normalized.includes('outage') || normalized.includes('down') || normalized.includes('degrad') ? 'status-error' : 'status-unknown');
+        chip.textContent = translateStatus(status);
+        chip.className = 'status-chip ' + statusClass(status);
         statusCell.appendChild(chip);
         row.appendChild(nameCell);
         row.appendChild(statusCell);
@@ -111,7 +136,7 @@
       } catch (err) {
         overallText.textContent = 'Fehler';
         setBadge('error');
-        errorText.textContent = 'Konnte Status nicht laden.';
+        errorText.textContent = 'Konnte den Status nicht laden.';
       }
     }
 

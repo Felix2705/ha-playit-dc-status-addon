@@ -17,7 +17,7 @@ STATUS_HEADERS = {
 INTERVAL = 60
 STATUS_DATA = {
     "last_update": None,
-    "overall": "unknown",
+    "overall": "unbekannt",
     "regions": {},
     "error": None,
 }
@@ -58,43 +58,55 @@ def extract_api_url(html_text):
 
 def normalize_status(value):
     if not value:
-        return "unknown"
+        return "unbekannt"
     value = str(value).strip().lower()
     if value in {"ok", "good", "operational", "up", "success", "available"}:
-        return "operational"
-    if value in {"danger", "down", "error", "outage", "critical", "failed"}:
-        return "issue"
+        return "betriebsbereit"
+    if value in {"danger", "down", "error", "outage", "critical", "failed", "issue"}:
+        return "störung"
     if value in {"warning", "degraded", "partial", "minor"}:
-        return "degraded"
-    return value
+        return "eingeschränkt"
+    return "unbekannt"
 
 
 def derive_overall_from_regions(regions):
     if not regions:
-        return "unknown"
+        return "unbekannt"
 
     statuses = [str(value).lower() for value in regions.values() if value]
-    if any("down" in s or "outage" in s or "danger" in s or "error" in s or "degrad" in s or "fail" in s for s in statuses):
-        return "issue"
-    if all(s in {"operational", "ok", "up", "available"} for s in statuses):
-        return "operational"
-    return "unknown"
+    if any(
+        "down" in s
+        or "outage" in s
+        or "danger" in s
+        or "error" in s
+        or "degrad" in s
+        or "fail" in s
+        or "störung" in s
+        or "eingeschränkt" in s
+        for s in statuses
+    ):
+        return "störung"
+    if all(s in {"betriebsbereit", "ok", "up", "available", "good", "success"} for s in statuses):
+        return "betriebsbereit"
+    if any("warning" in s or "partial" in s or "minor" in s for s in statuses):
+        return "eingeschränkt"
+    return "unbekannt"
 
 
 def parse_playit_json(data):
     regions = {}
-    overall = "unknown"
+    overall = "unbekannt"
 
     if isinstance(data, dict):
         counts = data.get("statistics", {}).get("counts", {})
         down = int(counts.get("down", 0) or 0)
         up = int(counts.get("up", 0) or 0)
         if down > 0:
-            overall = f"{down} down"
+            overall = f"{down} Störung"
         elif up > 0:
-            overall = "operational"
+            overall = "betriebsbereit"
         else:
-            overall = normalize_status(data.get("status", "unknown"))
+            overall = normalize_status(data.get("status", "unbekannt"))
 
         items = []
         if isinstance(data.get("data"), list):
@@ -111,7 +123,7 @@ def parse_playit_json(data):
             status = normalize_status(item.get("statusClass") or item.get("label") or item.get("state") or item.get("status") or item.get("indicator"))
             regions[name] = status
 
-        if overall == "unknown":
+        if overall == "unbekannt":
             overall = derive_overall_from_regions(regions)
 
     return overall, regions
@@ -148,11 +160,11 @@ def update_status():
     except Exception as err:
         STATUS_DATA = {
             "last_update": datetime.now(timezone.utc).isoformat(),
-            "overall": "error",
+            "overall": "fehler",
             "regions": {},
             "error": str(err),
         }
-        print(f"Status poll failed: {err}")
+        print(f"Statusabfrage fehlgeschlagen: {err}")
 
 
 def poll_loop():
@@ -184,5 +196,5 @@ if __name__ == "__main__":
     thread = threading.Thread(target=poll_loop, daemon=True)
     thread.start()
     server = ThreadingHTTPServer(("0.0.0.0", 8080), Handler)
-    print(f"Starting Playit Status UI on http://0.0.0.0:8080, polling {STATUS_URL} every {INTERVAL}s")
+    print(f"Starte Playit-Statusoberfläche auf http://0.0.0.0:8080, Abfrage von {STATUS_URL} alle {INTERVAL}s")
     server.serve_forever()

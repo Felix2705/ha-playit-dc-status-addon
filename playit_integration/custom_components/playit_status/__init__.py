@@ -2,6 +2,7 @@ from datetime import timedelta
 import asyncio
 import logging
 import re
+from urllib.parse import urlsplit, urlunsplit
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -28,22 +29,33 @@ class PlayitCoordinator(DataUpdateCoordinator):
         try:
             async with session.get(self.url, timeout=20) as resp:
                 text = await resp.text()
-                data = None
 
                 try:
-                    data = await resp.json()
+                    data = await resp.json(content_type=None)
                 except Exception:
                     data = None
 
-                if data:
+                if isinstance(data, dict):
                     parsed = parse_json(data)
-                    if parsed["regions"]:
+                    if parsed["overall"] != "unknown" or parsed["regions"] or "overall" in data:
                         return parsed
+
+                status_url = build_status_url(self.url)
+                if status_url != self.url:
+                    try:
+                        async with session.get(status_url, timeout=20) as status_resp:
+                            status_data = await status_resp.json(content_type=None)
+                            if isinstance(status_data, dict):
+                                parsed = parse_json(status_data)
+                                if parsed["overall"] != "unknown" or parsed["regions"] or "overall" in status_data:
+                                    return parsed
+                    except Exception:
+                        pass
 
                 api_url = extract_api_url(text)
                 if api_url:
                     async with session.get(api_url, timeout=20) as api_resp:
-                        api_data = await api_resp.json()
+                        api_data = await api_resp.json(content_type=None)
                         return parse_json(api_data)
 
                 return parse_html(text)
@@ -51,6 +63,21 @@ class PlayitCoordinator(DataUpdateCoordinator):
             raise UpdateFailed("Timeout fetching playit status") from err
         except Exception as err:
             raise UpdateFailed(err) from err
+
+
+def build_status_url(base_url: str) -> str:
+    parsed = urlsplit(base_url)
+    path = parsed.path.rstrip("/")
+
+    if path.endswith("/status"):
+        return base_url
+
+    if path:
+        new_path = f"{path}/status"
+    else:
+        new_path = "/status"
+
+    return urlunsplit((parsed.scheme, parsed.netloc, new_path, parsed.query, parsed.fragment))
 
 
 def extract_api_url(html_text: str):
@@ -89,7 +116,15 @@ def derive_overall_from_regions(regions):
     if not regions:
         return "unknown"
     statuses = [str(v).lower() for v in regions.values() if v]
-    if any("down" in s or "outage" in s or "danger" in s or "error" in s or "degrad" in s or "fail" in s for s in statuses):
+    if any(
+        "down" in s
+        or "outage" in s
+        or "danger" in s
+        or "error" in s
+        or "degrad" in s
+        or "fail" in s
+        for s in statuses
+    ):
         return "issue"
     if all(s in {"operational", "ok", "up", "available"} for s in statuses):
         return "operational"
@@ -103,7 +138,19 @@ def parse_json(data):
         "raw": data,
     }
 
-    if isinstance(data, dict):
+    if not isinstance(data, dict):
+        return result
+
+    if "overall" in data:
+        result["overall"] = normalize_status(data.get("overall"))
+
+    if isinstance(data.get("regions"), dict):
+        result["regions"] = {
+            str(name): normalize_status(status)
+            for name, status in data["regions"].items()
+        }
+
+    if not result["regions"]:
         if "status" in data and not isinstance(data["status"], dict):
             result["overall"] = normalize_status(data["status"])
 
@@ -118,38 +165,46 @@ def parse_json(data):
             items = data["monitors"]
 
         for item in items:
-            name = item.get("name") or item.get("groupName") or str(item.get("monitorId") or item.get("id") or "unknown")
-            status = normalize_status(item.get("statusClass") or item.get("label") or item.get("state") or item.get("status") or item.get("indicator"))
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name") or item.get("groupName") or str(
+                item.get("monitorId") or item.get("id") or "unknown"
+            )
+            status = normalize_status(
+                item.get("statusClass")
+                or item.get("label")
+                or item.get("state")
+                or item.get("status")
+                or item.get("indicator")
+            )
             result["regions"][name] = status
 
-        if not result["overall"]:
-            result["overall"] = derive_overall_from_regions(result["regions"])
+    if not result["overall"]:
+        result["overall"] = derive_overall_from_regions(result["regions"])
 
     return result
 
 
 def parse_html(text: str):
-    # naive parsing: find lines with common status words and preceding headings
     result = {"overall": None, "regions": {}, "raw": text}
     lines = text.splitlines()
     keywords = ["Operational", "operational", "Degraded", "degraded", "Major", "Outage", "maintenance"]
+
     for i, line in enumerate(lines):
         for kw in keywords:
             if kw in line:
-                # try to get a nearby heading for a name
                 name = None
-                # look backwards for a tag with text
-                for j in range(max(0, i-3), i+1):
+                for j in range(max(0, i - 3), i + 1):
                     l = lines[j].strip()
                     if l and not any(x in l for x in ["<svg", "cookie", "button"]):
-                        # strip tags
-                        import re
-
                         name = re.sub(r"<[^>]+>", "", l).strip()
                         break
                 if not name:
                     name = f"line_{i}"
                 result["regions"][name] = line.strip()
+
+    if result["regions"]:
+        result["overall"] = derive_overall_from_regions(result["regions"])
 
     return result
 

@@ -1,7 +1,8 @@
 {
   "domain": "playit_status",
   "name": "Playit Server Status",
-  "version": "0.1.4-beta",
+  "icon": "icon.svg",
+  "version": "0.1.5-Beta",
   "documentation": "",
   "requirements": [],
   "codeowners": [],
