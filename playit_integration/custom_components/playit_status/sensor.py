@@ -6,16 +6,18 @@ from homeassistant.helpers.entity import DeviceInfo
 
 from .const import DOMAIN
 
+STATE_OK = "betriebsbereit"
+STATE_ISSUE = "störung"
+STATE_DEGRADED = "eingeschränkt"
+STATE_UNKNOWN = "unbekannt"
+
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     coordinator = hass.data[DOMAIN]["coordinator"]
 
-    # create overall sensor plus one per region
+    entities = [PlayitOverallSensor(coordinator)]
+
     data = coordinator.data or {}
-    entities = []
-
-    entities.append(PlayitOverallSensor(coordinator))
-
     regions = data.get("regions", {}) if isinstance(data, dict) else {}
     for name in regions:
         entities.append(PlayitRegionSensor(coordinator, name))
@@ -67,20 +69,26 @@ class PlayitOverallSensor(PlayitBaseSensor):
         overall = data.get("overall") if isinstance(data, dict) else None
         if overall:
             return overall
-        # if not present, derive from regions
+
+        # Fallback (nur deutsch)
         regions = data.get("regions", {}) if isinstance(data, dict) else {}
         if not regions:
-            return "unknown"
-        # if any region contains keywords, report 'issue'
-        for v in regions.values():
-            if v and ("degrad" in str(v).lower() or "outag" in str(v).lower() or "major" in str(v).lower()):
-                return "issue"
-        return "operational"
+            return STATE_UNKNOWN
+
+        values = [str(v).lower() for v in regions.values() if v]
+        if any(v == STATE_ISSUE for v in values):
+            return STATE_ISSUE
+        if any(v == STATE_DEGRADED for v in values):
+            return STATE_DEGRADED
+        return STATE_OK
 
     @property
     def extra_state_attributes(self):
         data = self.coordinator.data or {}
-        return {"regions": data.get("regions", {}), ATTR_ATTRIBUTION: "Data from playit status"}
+        return {
+            "regions": data.get("regions", {}),
+            ATTR_ATTRIBUTION: "Daten von playit status",
+        }
 
 
 class PlayitRegionSensor(PlayitBaseSensor):
@@ -110,8 +118,8 @@ class PlayitRegionSensor(PlayitBaseSensor):
     def state(self):
         data = self.coordinator.data or {}
         regions = data.get("regions", {}) if isinstance(data, dict) else {}
-        return regions.get(self._region, "unknown")
+        return regions.get(self._region, STATE_UNKNOWN)
 
     @property
     def extra_state_attributes(self):
-        return {ATTR_ATTRIBUTION: "Data from playit status"}
+        return {ATTR_ATTRIBUTION: "Daten von playit status"}

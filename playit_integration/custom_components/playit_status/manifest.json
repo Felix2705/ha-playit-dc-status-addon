@@ -1,8 +1,9 @@
 {
   "domain": "playit_status",
   "name": "Playit Server Status",
-  "icon": "icon.svg",
-  "version": "0.1.5-Beta",
+  "config_flow": true,
+  "icon": "mdi:server-network",
+  "version": "0.1.6-Beta",
   "documentation": "",
   "requirements": [],
   "codeowners": [],

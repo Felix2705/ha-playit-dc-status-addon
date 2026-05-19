@@ -1,7 +1,9 @@
-from datetime import timedelta
+from __future__ import annotations
+
 import asyncio
 import logging
 import re
+from datetime import timedelta
 from urllib.parse import urlsplit, urlunsplit
 
 from homeassistant.core import HomeAssistant
@@ -12,21 +14,25 @@ from .const import DOMAIN, DEFAULT_URL, DEFAULT_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
+MODE_INTEGRATION = "integration"
+MODE_GUI_ONLY = "gui_only"
+
 
 class PlayitCoordinator(DataUpdateCoordinator):
     def __init__(self, hass: HomeAssistant, url: str, interval: int):
-        self.hass = hass
-        self.url = url
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
             update_interval=timedelta(seconds=interval),
         )
+        self.url = url
 
     async def _async_update_data(self):
         session = async_get_clientsession(self.hass)
+
         try:
+            # 1) Versuche direkt JSON (falls /status oder API-Endpunkt)
             async with session.get(self.url, timeout=20) as resp:
                 text = await resp.text()
 
@@ -37,9 +43,10 @@ class PlayitCoordinator(DataUpdateCoordinator):
 
                 if isinstance(data, dict):
                     parsed = parse_json(data)
-                    if parsed["overall"] != "unknown" or parsed["regions"] or "overall" in data:
+                    if parsed.get("regions") or parsed.get("overall"):
                         return parsed
 
+                # 2) Optional: falls URL die Add-on-Base ist, versuche /status daneben
                 status_url = build_status_url(self.url)
                 if status_url != self.url:
                     try:
@@ -47,11 +54,12 @@ class PlayitCoordinator(DataUpdateCoordinator):
                             status_data = await status_resp.json(content_type=None)
                             if isinstance(status_data, dict):
                                 parsed = parse_json(status_data)
-                                if parsed["overall"] != "unknown" or parsed["regions"] or "overall" in status_data:
+                                if parsed.get("regions") or parsed.get("overall"):
                                     return parsed
                     except Exception:
                         pass
 
+                # 3) Fallback: Public status page scrape
                 api_url = extract_api_url(text)
                 if api_url:
                     async with session.get(api_url, timeout=20) as api_resp:
@@ -59,6 +67,7 @@ class PlayitCoordinator(DataUpdateCoordinator):
                         return parse_json(api_data)
 
                 return parse_html(text)
+
         except asyncio.TimeoutError as err:
             raise UpdateFailed("Timeout fetching playit status") from err
         except Exception as err:
@@ -66,6 +75,10 @@ class PlayitCoordinator(DataUpdateCoordinator):
 
 
 def build_status_url(base_url: str) -> str:
+    """
+    Wenn base_url eine Add-on-Base ist, dann ist /status darunter.
+    (Falls base_url schon /status ist, wird es nicht verändert.)
+    """
     parsed = urlsplit(base_url)
     path = parsed.path.rstrip("/")
 
@@ -80,7 +93,7 @@ def build_status_url(base_url: str) -> str:
     return urlunsplit((parsed.scheme, parsed.netloc, new_path, parsed.query, parsed.fragment))
 
 
-def extract_api_url(html_text: str):
+def extract_api_url(html_text: str) -> str | None:
     match = re.search(r"window\.pspApiPath\s*=\s*['\"]([^'\"]+)['\"]", html_text)
     if match:
         api_url = match.group(1)
@@ -99,44 +112,59 @@ def extract_api_url(html_text: str):
     return None
 
 
-def normalize_status(value):
+def normalize_status(value) -> str:
+    """
+    Gibt ausschließlich DE-States zurück:
+    - betriebsbereit
+    - störung
+    - eingeschränkt
+    - unbekannt
+    """
     if not value:
-        return "unknown"
-    value = str(value).strip().lower()
-    if value in {"ok", "good", "operational", "up", "success", "available"}:
-        return "operational"
-    if value in {"danger", "down", "error", "outage", "critical", "failed"}:
-        return "issue"
-    if value in {"warning", "degraded", "partial", "minor"}:
-        return "degraded"
-    return value
+        return "unbekannt"
+
+    s = str(value).strip().lower()
+
+    # Deutsch (vom Add-on)
+    if s in {"betriebsbereit", "störung", "eingeschränkt", "unbekannt"}:
+        return s
+
+    # Englisch (vom Public API)
+    if s in {"ok", "good", "operational", "up", "success", "available"}:
+        return "betriebsbereit"
+    if s in {"danger", "down", "error", "outage", "critical", "failed", "issue"}:
+        return "störung"
+    if s in {"warning", "degraded", "partial", "minor"}:
+        return "eingeschränkt"
+
+    # Heuristik: Wortfragmente
+    if any(x in s for x in ["down", "outage", "danger", "error", "critical", "failed", "issue"]):
+        return "störung"
+    if any(x in s for x in ["warning", "degrad", "partial", "minor"]):
+        return "eingeschränkt"
+    if any(x in s for x in ["operational", "ok", "up", "available", "success", "good"]):
+        return "betriebsbereit"
+
+    return "unbekannt"
 
 
-def derive_overall_from_regions(regions):
+def derive_overall_from_regions(regions: dict[str, str]) -> str:
     if not regions:
-        return "unknown"
-    statuses = [str(v).lower() for v in regions.values() if v]
-    if any(
-        "down" in s
-        or "outage" in s
-        or "danger" in s
-        or "error" in s
-        or "degrad" in s
-        or "fail" in s
-        for s in statuses
-    ):
-        return "issue"
-    if all(s in {"operational", "ok", "up", "available"} for s in statuses):
-        return "operational"
-    return "unknown"
+        return "unbekannt"
+
+    statuses = [normalize_status(v) for v in regions.values()]
+
+    if any(s == "störung" for s in statuses):
+        return "störung"
+    if all(s == "betriebsbereit" for s in statuses):
+        return "betriebsbereit"
+    if any(s == "eingeschränkt" for s in statuses):
+        return "eingeschränkt"
+    return "unbekannt"
 
 
-def parse_json(data):
-    result = {
-        "overall": None,
-        "regions": {},
-        "raw": data,
-    }
+def parse_json(data) -> dict:
+    result = {"overall": None, "regions": {}, "raw": data}
 
     if not isinstance(data, dict):
         return result
@@ -145,14 +173,13 @@ def parse_json(data):
         result["overall"] = normalize_status(data.get("overall"))
 
     if isinstance(data.get("regions"), dict):
-        result["regions"] = {
-            str(name): normalize_status(status)
-            for name, status in data["regions"].items()
-        }
+        result["regions"] = {str(k): normalize_status(v) for k, v in data["regions"].items()}
 
+    # Falls es doch die Public API ist (ohne overall/regions Mapping)
     if not result["regions"]:
+        # optional: status Gesamtwert (wenn vorhanden)
         if "status" in data and not isinstance(data["status"], dict):
-            result["overall"] = normalize_status(data["status"])
+            result["overall"] = normalize_status(data.get("status"))
 
         items = []
         if isinstance(data.get("data"), list):
@@ -167,8 +194,10 @@ def parse_json(data):
         for item in items:
             if not isinstance(item, dict):
                 continue
-            name = item.get("name") or item.get("groupName") or str(
-                item.get("monitorId") or item.get("id") or "unknown"
+            name = (
+                item.get("name")
+                or item.get("groupName")
+                or str(item.get("monitorId") or item.get("id") or "unknown")
             )
             status = normalize_status(
                 item.get("statusClass")
@@ -179,46 +208,68 @@ def parse_json(data):
             )
             result["regions"][name] = status
 
-    if not result["overall"]:
-        result["overall"] = derive_overall_from_regions(result["regions"])
+    # Gesamt ableiten, wenn nicht vorhanden oder unbekannt
+    if not result.get("overall"):
+        result["overall"] = derive_overall_from_regions(result.get("regions", {}))
 
     return result
 
 
-def parse_html(text: str):
+def parse_html(text: str) -> dict:
+    # Sehr grober Fallback – sollte selten gebraucht werden
     result = {"overall": None, "regions": {}, "raw": text}
     lines = text.splitlines()
-    keywords = ["Operational", "operational", "Degraded", "degraded", "Major", "Outage", "maintenance"]
+
+    keywords = ["Operational", "operational", "Degraded", "degraded", "Major", "Outage", "maintenance", "warning"]
 
     for i, line in enumerate(lines):
         for kw in keywords:
             if kw in line:
-                name = None
+                name = f"line_{i}"
                 for j in range(max(0, i - 3), i + 1):
                     l = lines[j].strip()
                     if l and not any(x in l for x in ["<svg", "cookie", "button"]):
-                        name = re.sub(r"<[^>]+>", "", l).strip()
+                        name = re.sub(r"<[^>]+>", "", l).strip() or name
                         break
-                if not name:
-                    name = f"line_{i}"
-                result["regions"][name] = line.strip()
+                result["regions"][name] = normalize_status(line.strip())
 
-    if result["regions"]:
-        result["overall"] = derive_overall_from_regions(result["regions"])
-
+    result["overall"] = derive_overall_from_regions(result["regions"])
     return result
 
 
-async def async_setup(hass: HomeAssistant, config: dict):
-    conf = config.get(DOMAIN, {})
-    url = conf.get("url", DEFAULT_URL)
-    interval = conf.get("scan_interval", DEFAULT_SCAN_INTERVAL)
+async def _setup_coordinator_and_maybe_sensors(
+    hass: HomeAssistant, url: str, interval: int, mode: str
+) -> bool:
+    # Im GUI-only Modus: keine Sensoren, kein Polling (Add-on GUI nutzen)
+    if mode != MODE_INTEGRATION:
+        return True
 
     coordinator = PlayitCoordinator(hass, url, interval)
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})["coordinator"] = coordinator
+    hass.data[DOMAIN]["mode"] = mode
 
-    hass.helpers.discovery.load_platform("sensor", DOMAIN, {}, config)
+    # Legacy Platform Loading (sensor.py liest nur coordinator aus hass.data)
+    hass.helpers.discovery.load_platform("sensor", DOMAIN, {}, {})
 
     return True
+
+
+# Config-Entry Setup (wichtig, damit HA die Integration korrekt anbietet und auswählbar wird)
+async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
+    url = entry.data.get("url", DEFAULT_URL)
+    interval = entry.data.get("scan_interval", DEFAULT_SCAN_INTERVAL)
+    mode = entry.data.get("mode", MODE_INTEGRATION)
+
+    return await _setup_coordinator_and_maybe_sensors(hass, url, interval, mode)
+
+
+# Legacy YAML Support (falls jemand es noch so nutzt)
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    conf = config.get(DOMAIN, {})
+    url = conf.get("url", DEFAULT_URL)
+    interval = conf.get("scan_interval", DEFAULT_SCAN_INTERVAL)
+    mode = conf.get("mode", MODE_INTEGRATION)
+
+    return await _setup_coordinator_and_maybe_sensors(hass, url, interval, mode)
