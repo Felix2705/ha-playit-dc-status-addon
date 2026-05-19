@@ -10,6 +10,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.discovery import async_load_platform
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN, DEFAULT_URL, DEFAULT_SCAN_INTERVAL

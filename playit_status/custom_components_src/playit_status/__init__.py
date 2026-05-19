@@ -9,6 +9,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.discovery import async_load_platform
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN, DEFAULT_URL, DEFAULT_SCAN_INTERVAL
@@ -280,8 +281,8 @@ async def _setup_coordinator_and_maybe_sensors(
     hass.data.setdefault(DOMAIN, {})["coordinator"] = coordinator
     hass.data[DOMAIN]["mode"] = mode
 
-    # Legacy Platform Loading (sensor.py liest nur coordinator aus hass.data)
-    hass.helpers.discovery.load_platform("sensor", DOMAIN, {}, {})
+    # Legacy Platform Loading
+    await async_load_platform(hass, "sensor", DOMAIN, {}, {})
 
     return True
 
