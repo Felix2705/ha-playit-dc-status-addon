@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Playit DC Status</title>
+  <style>
+    body { margin: 0; font-family: "Inter", sans-serif; background: #0f172a; color: #e2e8f0; }
+    .page { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .badge { display: inline-flex; align-items: center; padding: 8px 12px; border-radius: 999px; font-weight: 600; }
+    .badge.online { background: #16a34a; color: #fff; }
+    .badge.issue { background: #f97316; color: #fff; }
+    .card { background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 18px; padding: 22px; margin-bottom: 18px; }
+    .row { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; }
+    .title { font-size: 22px; margin: 0 0 8px; }
+    .small { color: #94a3b8; }
+    .button { background: #2563eb; color: #fff; border: none; border-radius: 12px; padding: 12px 18px; cursor: pointer; font-weight: 600; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table th, .table td { text-align: left; padding: 12px 10px; }
+    .table th { color: #cbd5e1; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .table tr { border-bottom: 1px solid rgba(148, 163, 184, 0.12); }
+    .status-chip { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; font-size: 13px; }
+    .status-ok { background: #16a34a33; color: #a7f3d0; }
+    .status-error { background: #fb7185; color: #fff; }
+    .status-unknown { background: #334155; color: #cbd5e1; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div>
+        <h1 class="title">Playit DC Status</h1>
+        <p class="small">Aktueller Status und Regionenzustände von Playit.gg</p>
+      </div>
+      <button id="refresh" class="button">Aktualisieren</button>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <h2 class="title">Gesamtzustand</h2>
+          <p id="overall-text" class="small">Lade...</p>
+        </div>
+        <div id="overall-badge" class="badge status-unknown">Lade...</div>
+      </div>
+      <p class="small">Letzte Abfrage: <span id="last-update">–</span></p>
+      <p id="error-text" class="small" style="color:#f87171"></p>
+    </div>
+
+    <div class="card">
+      <h2 class="title">Regionen</h2>
+      <table class="table">
+        <thead>
+          <tr><th>Region</th><th>Status</th></tr>
+        </thead>
+        <tbody id="regions-body">
+          <tr><td colspan="2" class="small">Lade...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const refreshButton = document.querySelector('#refresh');
+    const overallText = document.querySelector('#overall-text');
+    const overallBadge = document.querySelector('#overall-badge');
+    const lastUpdate = document.querySelector('#last-update');
+    const errorText = document.querySelector('#error-text');
+    const regionsBody = document.querySelector('#regions-body');
+
+    function setBadge(status) {
+      overallBadge.textContent = status;
+      overallBadge.className = 'badge ' + (status === 'operational' ? 'online' : status === 'issue' || status === 'error' ? 'issue' : 'status-unknown');
+    }
+
+    function updateContent(data) {
+      const overall = data.overall || 'unknown';
+      overallText.textContent = overall;
+      setBadge(overall === 'operational' || overall.toLowerCase().includes('ok') ? 'operational' : overall === 'error' || overall.toLowerCase().includes('fail') ? 'issue' : overall);
+      lastUpdate.textContent = new Date(data.last_update || Date.now()).toLocaleString();
+      errorText.textContent = data.error ? 'Fehler: ' + data.error : '';
+
+      regionsBody.innerHTML = '';
+      const regions = data.regions || {};
+      if (!Object.keys(regions).length) {
+        regionsBody.innerHTML = '<tr><td colspan="2" class="small">Keine Regionen gefunden.</td></tr>';
+      }
+      Object.entries(regions).forEach(([region, status]) => {
+        const row = document.createElement('tr');
+        const nameCell = document.createElement('td');
+        nameCell.textContent = region;
+        const statusCell = document.createElement('td');
+        const chip = document.createElement('span');
+        const normalized = (status || 'unknown').toString().toLowerCase();
+        chip.textContent = status;
+        chip.className = 'status-chip ' + (normalized.includes('operational') || normalized.includes('ok') ? 'status-ok' : normalized.includes('error') || normalized.includes('outage') || normalized.includes('degrad') ? 'status-error' : 'status-unknown');
+        statusCell.appendChild(chip);
+        row.appendChild(nameCell);
+        row.appendChild(statusCell);
+        regionsBody.appendChild(row);
+      });
+    }
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/status');
+        const data = await res.json();
+        updateContent(data);
+      } catch (err) {
+        overallText.textContent = 'Fehler';
+        setBadge('error');
+        errorText.textContent = 'Konnte Status nicht laden.';
+      }
+    }
+
+    refreshButton.addEventListener('click', () => fetchStatus());
+    fetchStatus();
+    setInterval(fetchStatus, 30000);
+  </script>
+</body>
+</html>

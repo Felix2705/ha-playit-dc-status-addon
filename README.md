@@ -1,29 +1,23 @@
-# Playit Server Status — Home Assistant Addon/Integration
+# Playit Server Status
 
-Dieses Projekt stellt eine Home Assistant Integration (und optional ein Supervisor Add‑on Skeleton) bereit, die den Status von Playit.gg abfragt und als Sensoren in Home Assistant verfügbar macht.
+Dieses Repository enthält zwei Komponenten:
 
-Kurz:
-- Ein `sensor.playit_status_overall` zeigt den Gesamtzustand.
-- Pro erkannter Region wird ein `sensor.playit_status_region_<name>` angelegt.
+- `playit_status/` — ein Home Assistant Supervisor Add-on mit Ingress-Weboberfläche.
+- `playit_integration/` — eine Custom Integration mit `custom_components/playit_status`.
 
-Installation (kurz):
-- Empfohlen: Installation über HACS (Add Integration → suche "Playit Server Status" nach Hinzufügen des Custom Repository).
-- Manuell: Kopiere `custom_components/playit_status` nach `<config_dir>/custom_components/playit_status` und füge in `configuration.yaml`:
+Nutze das Add-on, wenn du die Statusüberwachung in Supervisor betreiben möchtest, oder die Integration für direkte Sensoren in Home Assistant.
 
-```yaml
-playit_status:
-  url: "https://dc.status.playit.gg/"
-  scan_interval: 60
-```
+## Ordnerstruktur
 
-- Optional: Für ein Dashboard siehe die Lovelace‑Snippets im Repo (`lovelace_playit_advanced.yaml`, `lovelace_playit_auto.yaml`).
+- `README.md`
+- `repository.yaml`
+- `playit_status/`
+- `playit_integration/`
 
-Supervisor Add‑on:
-- Im Ordner `playit_status` befindet sich ein Add‑on‑Skeleton, das die Status‑URL periodisch pollt und die Ergebnisse in die Addon‑Logs schreibt. Nutze dieses Add‑on, wenn du die Überwachung außerhalb der Integration betreiben möchtest.
+## Hinweise
 
-Fehlersuche:
-- Prüfe Home Assistant Logs auf Einträge mit `playit_status`.
-- Stelle sicher, dass dein Host Internetzugang hat und die Ziel‑URL erreichbar ist.
+- Die Add-on-Struktur ist jetzt wie beim MAP2MQTT-Repo aufgesetzt, sodass der Supervisor das Repository als Add-on-Repository erkennen kann.
+- Für die Integration nutze den Ordner `playit_integration/`.
 
 
 
