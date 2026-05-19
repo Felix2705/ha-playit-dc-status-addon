@@ -105,7 +105,7 @@
 
     async function fetchStatus() {
       try {
-        const res = await fetch('/status');
+        const res = await fetch('status');
         const data = await res.json();
         updateContent(data);
       } catch (err) {

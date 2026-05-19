@@ -56,7 +56,10 @@ class PlayitCoordinator(DataUpdateCoordinator):
 def extract_api_url(html_text: str):
     match = re.search(r"window\.pspApiPath\s*=\s*['\"]([^'\"]+)['\"]", html_text)
     if match:
-        return match.group(1)
+        api_url = match.group(1)
+        if api_url.startswith("/"):
+            return f"https://dc.status.playit.gg{api_url}"
+        return api_url
 
     match = re.search(r"https?://[^'\"]+/api/getMonitorList/[^'\"]+", html_text)
     if match:
