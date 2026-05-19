@@ -19,7 +19,7 @@ playit_status:
 - Optional: Für ein Dashboard siehe die Lovelace‑Snippets im Repo (`lovelace_playit_advanced.yaml`, `lovelace_playit_auto.yaml`).
 
 Supervisor Add‑on:
-- Im Ordner `addon/playit_status` befindet sich ein Add‑on‑Skeleton, das die Status‑URL periodisch pollt und die Ergebnisse in die Addon‑Logs schreibt. Nutze dieses Add‑on, wenn du die Überwachung außerhalb der Integration betreiben möchtest.
+- Im Ordner `playit_status` befindet sich ein Add‑on‑Skeleton, das die Status‑URL periodisch pollt und die Ergebnisse in die Addon‑Logs schreibt. Nutze dieses Add‑on, wenn du die Überwachung außerhalb der Integration betreiben möchtest.
 
 Fehlersuche:
 - Prüfe Home Assistant Logs auf Einträge mit `playit_status`.
