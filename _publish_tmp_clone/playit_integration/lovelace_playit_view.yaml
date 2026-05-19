@@ -1,0 +1,31 @@
+# Lovelace view to add to your UI (Raw config editor or include in ui-lovelace.yaml)
+# This view will appear in the left sidebar (navigation: true)
+
+title: Playit Status
+path: playit-status
+icon: mdi:server-network
+cards:
+  - type: horizontal-stack
+    cards:
+      - type: entities
+        title: Current Status
+        entities:
+          - entity: sensor.playit_status_overall
+          - entity: sensor.time
+      - type: entities
+        title: Regions
+        entities:
+          # Replace / extend these by actual region entities created by the integration
+          - entity: sensor.playit_status_region_DC_West
+          - entity: sensor.playit_status_region_DC_East
+  - type: entities
+    title: Controls
+    entities:
+      - entity: script.playit_refresh
+        name: Refresh Playit Status
+        icon: mdi:refresh
+        # Clicking the script triggers a refresh; no state to display
+
+# Notes:
+# - Add this view via Lovelace Raw config editor or merge into your existing ui-lovelace.yaml under 'views:'.
+# - Ensure 'sensor.time' integration is enabled (integration: 'time and date' or 'sensor.time').

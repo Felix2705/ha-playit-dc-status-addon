@@ -1,0 +1,41 @@
+button_card_templates:
+  header:
+    show_name: true
+    name: 'MAP5000 Dashboard'
+    show_state: false
+    styles:
+      card:
+        - background: 'rgba(20,23,28,0.6)'
+        - border-radius: 6px
+        - padding: 8px
+  header_time:
+    template: header
+    show_icon: false
+    show_name: true
+    show_state: true
+    entity: sensor.playit_last_updated
+    styles:
+      name:
+        - font-weight: bold
+  header_refresh:
+    template: header
+    show_icon: true
+    icon: mdi:refresh
+    tap_action:
+      action: call-service
+      service: script.playit_refresh
+  region_row:
+    show_name: true
+    show_state: true
+    layout: vertical
+    styles:
+      card:
+        - padding: 8px
+        - font-size: 14px
+    state:
+      - value: 'Frei'
+        color: green
+      - value: 'issue'
+        color: red
+      - operator: default
+        color: auto
