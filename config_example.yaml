@@ -1,4 +1,0 @@
-# Beispielkonfiguration für configuration.yaml
-playit_status:
-  url: "https://dc.status.playit.gg/"
-  scan_interval: 60
