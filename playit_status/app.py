@@ -252,8 +252,9 @@ def copy_integration_into_ha():
         try:
             with open(manifest, "r", encoding="utf-8") as mf:
                 manifest_data = json.load(mf)
+            # kurz & eindeutig, damit man es im Log leicht wiederfindet/kopieren kann
             log(
-                f"manifest verifiziert: icon={manifest_data.get('icon')} version={manifest_data.get('version')}"
+                f"MANIFEST_ICON_VERSION icon={manifest_data.get('icon')} version={manifest_data.get('version')}"
             )
         except Exception as err:
             log(f"manifest.json Verifikation fehlgeschlagen: {err}")
