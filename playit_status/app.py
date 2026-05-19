@@ -228,7 +228,12 @@ def copy_integration_into_ha():
 
         os.makedirs(cfg_cc_root, exist_ok=True)
 
-        # Python 3.12: dirs_exist_ok=True erlaubt Overwrite/Update
+        # Für saubere Updates: Zielordner vorher komplett entfernen,
+        # damit auch entfernte/umstrukturierte Dateien (z.B. config_flow Änderungen)
+        # nicht als Altbestand im HA-Verzeichnis bleiben.
+        if os.path.exists(dst):
+            shutil.rmtree(dst, ignore_errors=True)
+
         shutil.copytree(src, dst, dirs_exist_ok=True)
 
         # Verifikation nach dem Kopieren
